@@ -219,6 +219,22 @@ and a fresh file already gets the current schema.
 
 Timestamps are stored in UTC.
 
+## Moving the library to another database
+
+`tools/migrate_db.py` copies every saved master from one database to another,
+reusing the app's own storage layer - so the target gets the current schema,
+the primary key and the batched inserts rather than a raw table dump.
+
+Point `HAIRCUT_DB_*` at the source and `HAIRCUT_TARGET_*` at the destination:
+
+```bash
+HAIRCUT_DB_HOST=127.0.0.1 HAIRCUT_DB_USER=root HAIRCUT_DB_PASSWORD=... HAIRCUT_DB_NAME=haircut HAIRCUT_TARGET_HOST=mysql-xxxx.aivencloud.com HAIRCUT_TARGET_PORT=23456 HAIRCUT_TARGET_USER=avnadmin HAIRCUT_TARGET_PASSWORD=... HAIRCUT_TARGET_NAME=haircut HAIRCUT_TARGET_SSL_CA=certs/mysql-ca.pem python tools/migrate_db.py --dry-run     # then drop --dry-run
+```
+
+Nothing is written to the source. Re-running is safe: a master already on the
+target is skipped unless you pass `--replace`. Row counts and haircut values
+are verified after the copy.
+
 ## Notes on behaviour
 
 - **Matching order.** ISIN first, then exact normalised scheme name, then
