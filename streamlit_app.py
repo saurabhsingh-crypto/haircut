@@ -100,23 +100,36 @@ def login_screen() -> None:
             for problem in AUTH_PROBLEMS:
                 st.markdown(f"- {problem}")
             st.markdown(
-                "Fill these in `.streamlit/secrets.toml` (locally) or in the "
-                "app's secrets (when hosted), and set "
-                "`HAIRCUT_ALLOWED_DOMAINS` so only your organisation can sign "
-                "in. `.streamlit/secrets.toml.example` has a working template."
+                "Add these to **Manage app -> Settings -> Secrets** when "
+                "hosted, or to `.streamlit/secrets.toml` locally. "
+                "`.streamlit/secrets.toml.example` has a working template."
             )
+            st.warning(
+                "Ordering matters. In TOML every plain key *below* a "
+                "`[table]` header belongs to that table, so the "
+                "`HAIRCUT_*` settings must come **above** `[auth]`. Put them "
+                "the other way round and they are read as part of `[auth]`, "
+                "and the app silently falls back to a temporary database.",
+                icon=":material/warning:")
             st.code(
+                'HAIRCUT_ALLOWED_DOMAINS = "yourcompany.com"\n'
+                '\n'
+                '# ... any HAIRCUT_DB_* settings go here too, above [auth] ...\n'
+                '\n'
                 '[auth]\n'
-                'redirect_uri = "http://localhost:8501/oauth2callback"\n'
+                'redirect_uri = '
+                '"https://<your-app>.streamlit.app/oauth2callback"\n'
                 'cookie_secret = "<run: python -c \'import secrets;'
                 ' print(secrets.token_hex(32))\'>"\n'
                 'client_id = "<from your identity provider>"\n'
                 'client_secret = "<from your identity provider>"\n'
                 'server_metadata_url = "https://accounts.google.com/'
-                '.well-known/openid-configuration"\n'
-                '\n'
-                'HAIRCUT_ALLOWED_DOMAINS = "yourcompany.com"\n',
+                '.well-known/openid-configuration"\n',
                 language="toml")
+            st.caption(
+                "Locally, `redirect_uri` is "
+                "`http://localhost:8501/oauth2callback` instead. Register both "
+                "with your identity provider and one client covers each.")
             st.caption(
                 "For local development only, set "
                 "`HAIRCUT_ALLOW_ANONYMOUS = \"1\"` to skip sign-in. Never set "
