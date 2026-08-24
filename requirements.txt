@@ -1,0 +1,19 @@
+# Pinned so a redeploy cannot silently pull an incompatible major version.
+# Verified together on Python 3.14.
+
+streamlit==1.59.1
+Authlib==1.6.5           # required by st.login (OIDC single sign-on)
+
+pandas==3.0.3
+numpy==2.5.1
+rapidfuzz==3.14.5
+altair==6.2.2
+
+# --- file readers ---
+openpyxl==3.1.5          # .xlsx / .xlsm
+xlrd==2.0.2              # legacy .xls
+pyxlsb==1.0.10           # .xlsb
+pdfplumber==0.11.7       # PDF statements
+
+# --- database ---
+PyMySQL==1.2.0
