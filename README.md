@@ -193,6 +193,7 @@ never shadowed by a file committed by mistake.
 | `HAIRCUT_DB` | next to the app | SQLite file path, local development only. |
 | `HAIRCUT_ALLOWED_DOMAINS` | - | Comma-separated email domains that may sign in. |
 | `HAIRCUT_ALLOWED_EMAILS` | - | Comma-separated individual addresses. |
+| `HAIRCUT_ADMIN_EMAILS` | - | Comma-separated addresses that get admin rights. |
 | `HAIRCUT_ALLOW_ANONYMOUS` | - | `1` disables sign-in. Local development only. |
 
 Upload size is capped at 25 MB in `.streamlit/config.toml`
@@ -218,6 +219,31 @@ migration is MySQL-only; SQLite cannot add a primary key with `ALTER TABLE`,
 and a fresh file already gets the current schema.
 
 Timestamps are stored in UTC.
+
+## Who can do what
+
+Two levels, both driven by the signed-in email address.
+
+| | Signed in | Admin |
+|---|---|---|
+| Calculate margin, drill down, export | yes | yes |
+| Add a master, or refresh one by re-uploading | yes | yes |
+| Delete a master permanently | no | yes |
+| See the Diagnostics page | no | yes |
+
+`HAIRCUT_ALLOWED_DOMAINS` / `HAIRCUT_ALLOWED_EMAILS` decide who gets in.
+`HAIRCUT_ADMIN_EMAILS` decides who gets the destructive controls, and is a
+strict subset. An empty admin list grants nobody, the same way an empty
+allowlist admits nobody.
+
+Diagnostics is not merely hidden from the menu. `st.navigation` resolves a URL
+against the page list built for that session, so a page that was never
+registered cannot be reached by typing its path - the request falls back to
+the default page. The page also re-checks on entry, so it stays safe if
+navigation is ever restructured.
+
+Running locally with `HAIRCUT_ALLOW_ANONYMOUS = "1"` counts as admin, so the
+diagnostics page remains usable while developing without an identity provider.
 
 ## Moving the library to another database
 

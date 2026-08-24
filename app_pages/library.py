@@ -43,28 +43,33 @@ else:
             "slug": None,
         })
 
-    with st.expander("Remove a master", icon=":material/delete:"):
-        by_slug = {m["slug"]: m for m in masters}
-        victim = st.selectbox(
-            "Master to remove", list(by_slug),
-            format_func=lambda s: f"{by_slug[s]['name']} "
-                                  f"({by_slug[s]['n_rows']:,} records)")
-        st.caption("This deletes the master and all of its haircut records. "
-                   "It cannot be undone.")
-        confirm = st.text_input(
-            "Type the master's name to confirm",
-            placeholder=by_slug[victim]["name"])
-        if st.button("Remove permanently", icon=":material/delete_forever:",
-                     disabled=confirm.strip() != by_slug[victim]["name"]):
-            try:
-                store.delete_master(victim)
-            except hc.StorageError as e:
-                st.error(str(e), icon=":material/database_off:")
-            else:
-                sup.clear_library_cache()
-                st.success(f"Removed {by_slug[victim]['name']}.",
-                           icon=":material/check_circle:")
-                st.rerun()
+    if not st.session_state.get("is_admin"):
+        st.caption(":material/lock: Removing a master is restricted to "
+                   "administrators. Anyone signed in can add one, or refresh "
+                   "an existing one by re-uploading under the same name.")
+    else:
+        with st.expander("Remove a master", icon=":material/delete:"):
+            by_slug = {m["slug"]: m for m in masters}
+            victim = st.selectbox(
+                "Master to remove", list(by_slug),
+                format_func=lambda s: f"{by_slug[s]['name']} "
+                                      f"({by_slug[s]['n_rows']:,} records)")
+            st.caption("This deletes the master and all of its haircut records. "
+                       "It cannot be undone.")
+            confirm = st.text_input(
+                "Type the master's name to confirm",
+                placeholder=by_slug[victim]["name"])
+            if st.button("Remove permanently", icon=":material/delete_forever:",
+                         disabled=confirm.strip() != by_slug[victim]["name"]):
+                try:
+                    store.delete_master(victim)
+                except hc.StorageError as e:
+                    st.error(str(e), icon=":material/database_off:")
+                else:
+                    sup.clear_library_cache()
+                    st.success(f"Removed {by_slug[victim]['name']}.",
+                               icon=":material/check_circle:")
+                    st.rerun()
 
 # --------------------------------------------------------------------------- #
 # Add or replace a master

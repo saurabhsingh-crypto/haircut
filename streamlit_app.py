@@ -33,7 +33,7 @@ _CONFIG_KEYS = (
     "HAIRCUT_DB_PASSWORD", "HAIRCUT_DB_NAME", "HAIRCUT_DB_SSL",
     "HAIRCUT_DB_SSL_CA", "HAIRCUT_REQUIRE_MYSQL", "HAIRCUT_DB",
     "HAIRCUT_ALLOWED_DOMAINS", "HAIRCUT_ALLOWED_EMAILS",
-    "HAIRCUT_ALLOW_ANONYMOUS",
+    "HAIRCUT_ADMIN_EMAILS", "HAIRCUT_ALLOW_ANONYMOUS",
 )
 
 
@@ -177,6 +177,7 @@ else:
 # Signed in and approved. Pages read these instead of touching st.user.
 st.session_state["user_email"] = USER_EMAIL
 st.session_state["user_name"] = USER_NAME
+st.session_state["is_admin"] = sup.is_admin(USER_EMAIL)
 
 # --------------------------------------------------------------------------- #
 # Navigation
@@ -198,12 +199,20 @@ with st.sidebar:
     elif st.button("Sign out", icon=":material/logout:", width="stretch"):
         st.logout()
 
-page = st.navigation([
+pages = [
     st.Page("app_pages/calculate.py", title="Calculate margin",
             icon=":material/calculate:", default=True),
     st.Page("app_pages/library.py", title="Haircut library",
             icon=":material/library_books:"),
-    st.Page("app_pages/diagnostics.py", title="Diagnostics",
-            icon=":material/monitor_heart:"),
-])
+]
+
+# Diagnostics is registered only for admins. This is real access control, not
+# a hidden link: st.navigation resolves the URL against the page list built
+# for THIS session, so a page that was never registered cannot be reached by
+# typing its path - the request falls back to the default page.
+if st.session_state["is_admin"]:
+    pages.append(st.Page("app_pages/diagnostics.py", title="Diagnostics",
+                         icon=":material/monitor_heart:"))
+
+page = st.navigation(pages)
 page.run()

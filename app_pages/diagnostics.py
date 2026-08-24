@@ -18,6 +18,15 @@ from haircut_core import store
 
 st.title("Diagnostics")
 
+# The entry point only registers this page for admins, so reaching it any
+# other way should not happen. Checked again here so the page stays safe if
+# navigation is ever restructured.
+if not st.session_state.get("is_admin"):
+    st.error("This page is for administrators only.", icon=":material/lock:")
+    st.caption("Ask whoever set up the app to add your address to "
+               "`HAIRCUT_ADMIN_EMAILS`.")
+    st.stop()
+
 # --------------------------------------------------------------------------- #
 # Storage
 # --------------------------------------------------------------------------- #

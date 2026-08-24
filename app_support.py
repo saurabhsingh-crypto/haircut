@@ -86,8 +86,29 @@ def allowed_emails() -> set[str]:
     return csv_set(os.environ.get("HAIRCUT_ALLOWED_EMAILS"))
 
 
+def admin_emails() -> set[str]:
+    """Addresses allowed to see Diagnostics and delete saved masters."""
+    return csv_set(os.environ.get("HAIRCUT_ADMIN_EMAILS"))
+
+
 def allow_anonymous() -> bool:
     return truthy(os.environ.get("HAIRCUT_ALLOW_ANONYMOUS"))
+
+
+def normalize_email(email: str | None) -> str | None:
+    """A well-formed address, lower-cased, or None.
+
+    Shared by every access check. Without the structural test a bare domain
+    such as "company.com" would satisfy a domain comparison, because
+    rpartition returns the whole string when the separator is absent.
+    """
+    if not email:
+        return None
+    email = str(email).strip().lower()
+    local, at, domain = email.partition("@")
+    if not at or not local or not domain or "@" in domain:
+        return None
+    return email
 
 
 def is_allowed(email: str | None, domains: set[str] | None = None,
@@ -98,20 +119,30 @@ def is_allowed(email: str | None, domains: set[str] | None = None,
     will happily authenticate any account on the internet, so an empty
     allowlist is a misconfiguration, not an invitation.
     """
+    email = normalize_email(email)
     if not email:
         return False
     domains = allowed_domains() if domains is None else domains
     emails = allowed_emails() if emails is None else emails
-    email = email.strip().lower()
+    return email in emails or email.rpartition("@")[2] in domains
 
-    # Require a well-formed address. Without this a bare "company.com" would
-    # satisfy the domain check, because rpartition returns the whole string
-    # when the separator is absent.
-    local, at, domain = email.partition("@")
-    if not at or not local or not domain or "@" in domain:
+
+def is_admin(email: str | None, admins: set[str] | None = None) -> bool:
+    """Whether this identity may see Diagnostics and delete saved masters.
+
+    Admin is a strict subset of signed-in: being on the allowlist gets you
+    into the app, being on this list gets you the destructive controls. An
+    empty admin list grants nobody, matching how the sign-in gate behaves.
+
+    Local anonymous mode is treated as admin, so the diagnostics page stays
+    usable while developing without an identity provider.
+    """
+    if allow_anonymous():
+        return True
+    email = normalize_email(email)
+    if not email:
         return False
-
-    return email in emails or domain in domains
+    return email in (admin_emails() if admins is None else admins)
 
 
 # --------------------------------------------------------------------------- #
