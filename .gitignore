@@ -1,0 +1,16 @@
+# secrets - never commit
+.env
+.env.*
+!.env.example
+# every secrets variant, including working copies, EXCEPT the template
+.streamlit/secrets.toml
+.streamlit/secrets.toml.*
+!.streamlit/secrets.toml.example
+
+# local database file (SQLite fallback)
+haircut.db
+
+# python
+__pycache__/
+*.pyc
+.venv/

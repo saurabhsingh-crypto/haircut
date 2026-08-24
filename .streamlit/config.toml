@@ -1,0 +1,27 @@
+# Project-level Streamlit configuration.
+# Committed on purpose: it holds no secrets.
+
+[server]
+# Cap uploads. Without this a single large file is read entirely into memory.
+maxUploadSize = 25
+# Streamlit enables both of these automatically once [auth] is configured;
+# setting them here keeps the intent explicit for deployments without SSO.
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Never render tracebacks in the browser. Errors are surfaced as readable
+# messages by the app itself; the detail belongs in the server log.
+showErrorDetails = "none"
+showSidebarNavigation = true
+
+[theme]
+base = "light"
+primaryColor = "#0F6E6B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F5F4"
+textColor = "#0F1A19"
+font = "sans-serif"
