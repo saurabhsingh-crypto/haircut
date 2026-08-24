@@ -115,10 +115,14 @@ def main() -> int:
         print(f"  {key:22s} {shown}")
     print(f"  TLS                    {'CA-verified via ' + ca if ca else 'encrypted, unverified'}")
 
-    # keep the current (source) settings before switching over
-    source = {k: os.environ.get(k) for k in
-              ("HAIRCUT_DB_HOST", "HAIRCUT_DB_PORT", "HAIRCUT_DB_USER",
-               "HAIRCUT_DB_PASSWORD", "HAIRCUT_DB_NAME")}
+    # Snapshot the current (source) settings before switching over. The TLS
+    # keys matter as much as the credentials: the source and the target are
+    # different servers, and applying the target's CA to a plain local MySQL
+    # makes the source connection fail.
+    SOURCE_KEYS = ("HAIRCUT_DB_HOST", "HAIRCUT_DB_PORT", "HAIRCUT_DB_USER",
+                   "HAIRCUT_DB_PASSWORD", "HAIRCUT_DB_NAME",
+                   "HAIRCUT_DB_SSL", "HAIRCUT_DB_SSL_CA", "HAIRCUT_DB")
+    source = {k: os.environ.get(k) for k in SOURCE_KEYS}
 
     apply_env(settings, ca)
     from haircut_core import store
@@ -152,19 +156,22 @@ def main() -> int:
 
     if migrate:
         print("\ncopying the library across:")
-        for key, val in source.items():
-            if val:
-                os.environ[f"HAIRCUT_TARGET_{key[len('HAIRCUT_DB_'):]}"] = \
-                    settings[key]
-        # simplest reliable path: hand off to the tested migrator
+        # Hand off to the tested migrator. Source and target are different
+        # servers with different TLS settings, so the source half of the
+        # environment is rebuilt from the snapshot taken before we switched
+        # over - otherwise the target's CA is applied to the source
+        # connection and a plain local MySQL refuses it.
         target = {f"HAIRCUT_TARGET_{k[len('HAIRCUT_DB_'):]}": v
                   for k, v in settings.items()}
         if ca:
             target["HAIRCUT_TARGET_SSL_CA"] = ca
         else:
             target["HAIRCUT_TARGET_SSL"] = "1"
+
         env = dict(os.environ)
-        env.update({k: (v or "") for k, v in source.items() if v})
+        for key in SOURCE_KEYS:
+            env.pop(key, None)
+        env.update({k: v for k, v in source.items() if v})
         env.update(target)
         import subprocess
         proc = subprocess.run(
