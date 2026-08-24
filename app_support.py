@@ -178,6 +178,9 @@ def bootstrap_storage() -> dict:
 
     status["ok"] = True
     status["migrations"] = list(store.MIGRATIONS)
+    # Retention, applied once per process rather than on a schedule: the table
+    # is tiny, but it should not grow without bound either.
+    store.prune_events(keep_days=365)
     if existing or not os.path.exists(SEED_FILE):
         return status
 
@@ -188,13 +191,33 @@ def bootstrap_storage() -> dict:
         res = pipeline.standardize(io.BytesIO(raw),
                                    "IIFL Haircut Master.xlsx", "haircut")
         if res.n_rows:
-            store.save_master(SEED_NAME, "IIFL Haircut Master.xlsx", res.data)
+            store.save_master(SEED_NAME, "IIFL Haircut Master.xlsx", res.data,
+                              actor="system (first-run seed)")
             status["seeded"] = True
     except Exception as e:
         status["warnings"].append(
             f"Could not seed the bundled IIFL master: {type(e).__name__}. "
             f"Upload a haircut master on the Haircut library page.")
     return status
+
+
+# --------------------------------------------------------------------------- #
+# Audit log
+# --------------------------------------------------------------------------- #
+
+SIGN_IN = store.SIGN_IN
+MASTER_SAVED = store.MASTER_SAVED
+MASTER_REPLACED = store.MASTER_REPLACED
+MASTER_DELETED = store.MASTER_DELETED
+
+
+def log_event(email: str | None, event: str, detail: str = "") -> None:
+    """Record an audit event. Never raises, never blocks the caller's action."""
+    store.log_event(email, event, detail)
+
+
+def current_user() -> str | None:
+    return st.session_state.get("user_email")
 
 
 def require_storage() -> dict:

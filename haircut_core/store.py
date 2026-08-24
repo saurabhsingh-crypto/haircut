@@ -38,7 +38,7 @@ import sqlite3
 import tempfile
 import threading
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
@@ -254,6 +254,13 @@ def _create_schema(c: _DBConn) -> None:
             scheme_name TEXT,
             haircut_pct DOUBLE,
             INDEX ix_rows_slug (slug)) CHARACTER SET utf8mb4""")
+        c.execute("""CREATE TABLE IF NOT EXISTS access_log(
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            at DATETIME NOT NULL,
+            email VARCHAR(191),
+            event VARCHAR(32),
+            detail TEXT,
+            INDEX ix_log_at (at)) CHARACTER SET utf8mb4""")
     else:
         c.execute("""CREATE TABLE IF NOT EXISTS masters(
             slug TEXT PRIMARY KEY, name TEXT, source_file TEXT,
@@ -262,6 +269,10 @@ def _create_schema(c: _DBConn) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             slug TEXT, isin TEXT, scheme_name TEXT, haircut_pct REAL)""")
         c.execute("CREATE INDEX IF NOT EXISTS ix_rows_slug ON haircut_rows(slug)")
+        c.execute("""CREATE TABLE IF NOT EXISTS access_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL, email TEXT, event TEXT, detail TEXT)""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_log_at ON access_log(at)")
     c.commit()
 
 
@@ -402,8 +413,13 @@ def load_master(slug: str) -> pd.DataFrame:
 # Writes
 # --------------------------------------------------------------------------- #
 
-def save_master(name: str, source_file: str, std_df: pd.DataFrame) -> dict:
-    """Upsert by name: replace the master's rows with `std_df`, atomically."""
+def save_master(name: str, source_file: str, std_df: pd.DataFrame,
+                actor: str | None = None) -> dict:
+    """Upsert by name: replace the master's rows with `std_df`, atomically.
+
+    Auditing happens here rather than at the call site, so a future caller
+    cannot change the library without the change being recorded.
+    """
     slug = slugify(name)
     now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
     df = std_df[schema.STD_HAIRCUT_COLS]
@@ -430,6 +446,7 @@ def save_master(name: str, source_file: str, std_df: pd.DataFrame) -> dict:
         try:
             prev = c.execute("SELECT created FROM masters WHERE slug=?",
                              (slug,)).fetchone()
+            existed = prev is not None
             created = prev[0] if prev else stamp
             c.execute("DELETE FROM haircut_rows WHERE slug=?", (slug,))
             for start in range(0, len(records), _INSERT_BATCH):
@@ -448,17 +465,97 @@ def save_master(name: str, source_file: str, std_df: pd.DataFrame) -> dict:
             raise StorageError(
                 f"Could not save '{name}' to {target_description()}: "
                 f"{type(e).__name__}. Nothing was changed.") from e
-    return get_meta(slug) or {"slug": slug, "name": (name or "").strip(),
+    meta = get_meta(slug) or {"slug": slug, "name": (name or "").strip(),
                               "source_file": source_file,
                               "n_rows": int(len(df))}
+    log_event(actor, MASTER_REPLACED if existed else MASTER_SAVED,
+              f"{meta['name']} ({meta['n_rows']:,} records) from {source_file}")
+    return meta
 
 
-def delete_master(slug: str) -> None:
+# --------------------------------------------------------------------------- #
+# Access log
+# --------------------------------------------------------------------------- #
+#
+# Records who signed in and who changed a haircut master. Deliberately never
+# records holdings, client codes or portfolio values: this is a margin tool
+# holding client data, and an audit trail must not become a second copy of it.
+
+SIGN_IN = "sign_in"
+MASTER_SAVED = "master_saved"
+MASTER_REPLACED = "master_replaced"
+MASTER_DELETED = "master_deleted"
+
+EVENT_LABELS = {
+    SIGN_IN: "Signed in",
+    MASTER_SAVED: "Added a master",
+    MASTER_REPLACED: "Replaced a master",
+    MASTER_DELETED: "Deleted a master",
+}
+
+
+def log_event(email: str | None, event: str, detail: str = "") -> None:
+    """Append one audit row. Never raises.
+
+    Logging is not worth failing a user's action over, so a storage problem
+    here is swallowed. The events that matter are also visible in the data
+    itself (a master's `updated` timestamp, for instance).
+    """
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+        stamp = now if backend() == "mysql" else now.strftime("%Y-%m-%d %H:%M:%S")
+        with closing(_conn()) as c:
+            c.execute("INSERT INTO access_log(at,email,event,detail) "
+                      "VALUES(?,?,?,?)",
+                      (stamp, (email or "unknown")[:191], event[:32],
+                       (detail or "")[:500]))
+            c.commit()
+    except Exception:
+        pass
+
+
+def recent_events(limit: int = 200) -> list[dict]:
+    """The most recent audit rows, newest first."""
+    limit = max(1, min(int(limit), 2000))
+    with closing(_conn()) as c:
+        rows = c.execute(
+            f"SELECT at,email,event,detail FROM access_log "
+            f"ORDER BY at DESC, id DESC LIMIT {limit}").fetchall()
+    out = []
+    for at, email, event, detail in rows:
+        if isinstance(at, datetime):
+            at = at.strftime("%Y-%m-%d %H:%M")
+        out.append({"when_utc": str(at), "who": email,
+                    "what": EVENT_LABELS.get(event, event), "detail": detail})
+    return out
+
+
+def prune_events(keep_days: int = 365) -> int:
+    """Drop audit rows older than `keep_days`. Returns how many went."""
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0) \
+        - timedelta(days=int(keep_days))
+    stamp = cutoff if backend() == "mysql" else cutoff.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with closing(_conn()) as c:
+            cur = c.execute("DELETE FROM access_log WHERE at < ?", (stamp,))
+            n = cur.rowcount or 0
+            c.commit()
+        return n
+    except Exception:
+        return 0
+
+
+def delete_master(slug: str, actor: str | None = None) -> None:
+    """Remove a master and all of its rows. Audited here, not at the call site."""
+    gone = get_meta(slug)
     with _DBLOCK, closing(_conn()) as c:
         try:
             c.execute("DELETE FROM haircut_rows WHERE slug=?", (slug,))
             c.execute("DELETE FROM masters WHERE slug=?", (slug,))
             c.commit()
+            log_event(actor, MASTER_DELETED,
+                      f"{gone['name']} ({gone['n_rows']:,} records)"
+                      if gone else slug)
         except Exception as e:
             c.rollback()
             raise StorageError(

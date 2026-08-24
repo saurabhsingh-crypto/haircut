@@ -63,6 +63,47 @@ else:
                  icon=":material/error:")
 
 # --------------------------------------------------------------------------- #
+# Access log
+# --------------------------------------------------------------------------- #
+
+st.subheader("Access log")
+st.caption("Who signed in, and who changed a haircut master. Times are UTC. "
+           "Holdings, client codes and portfolio values are never recorded.")
+
+if not reachable:
+    st.caption("Unavailable while the database is unreachable.")
+else:
+    try:
+        events = store.recent_events(limit=500)
+    except Exception as e:
+        events = None
+        st.error(f"Could not read the access log: {type(e).__name__}.",
+                 icon=":material/error:")
+    if events is not None:
+        if not events:
+            st.caption("Nothing recorded yet. Sign-ins are logged from now on.")
+        else:
+            people = sorted({e["who"] for e in events})
+            kinds = sorted({e["what"] for e in events})
+            with st.container(horizontal=True):
+                who = st.multiselect("Account", people, placeholder="Everyone")
+                what = st.multiselect("Event", kinds, placeholder="All events")
+            shown = [e for e in events
+                     if (not who or e["who"] in who)
+                     and (not what or e["what"] in what)]
+            st.dataframe(
+                shown, hide_index=True,
+                column_config={
+                    "when_utc": st.column_config.TextColumn("When (UTC)",
+                                                            pinned=True),
+                    "who": st.column_config.TextColumn("Account"),
+                    "what": st.column_config.TextColumn("Event"),
+                    "detail": st.column_config.TextColumn("Detail", width="large"),
+                })
+            st.caption(f"Showing {len(shown):,} of the {len(events):,} most "
+                       f"recent entries. Rows older than a year are pruned.")
+
+# --------------------------------------------------------------------------- #
 # Configuration review
 # --------------------------------------------------------------------------- #
 

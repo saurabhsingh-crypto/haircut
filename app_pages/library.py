@@ -62,7 +62,7 @@ else:
             if st.button("Remove permanently", icon=":material/delete_forever:",
                          disabled=confirm.strip() != by_slug[victim]["name"]):
                 try:
-                    store.delete_master(victim)
+                    store.delete_master(victim, actor=sup.current_user())
                 except hc.StorageError as e:
                     st.error(str(e), icon=":material/database_off:")
                 else:
@@ -162,7 +162,8 @@ if clean and clean.lower() in existing_names:
 if st.button("Save to library", icon=":material/save:", type="primary",
              disabled=not clean):
     try:
-        meta = store.save_master(clean, source_file, res.data)
+        meta = store.save_master(clean, source_file, res.data,
+                                 actor=sup.current_user())
     except hc.StorageError as e:
         st.error(str(e), icon=":material/database_off:")
     except Exception as e:

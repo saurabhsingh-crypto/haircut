@@ -179,6 +179,12 @@ st.session_state["user_email"] = USER_EMAIL
 st.session_state["user_name"] = USER_NAME
 st.session_state["is_admin"] = sup.is_admin(USER_EMAIL)
 
+# One audit row per session, not per rerun: the script re-executes on every
+# interaction, so this is guarded rather than called unconditionally.
+if not st.session_state.get("signin_logged"):
+    st.session_state["signin_logged"] = True
+    sup.log_event(USER_EMAIL, sup.SIGN_IN)
+
 # --------------------------------------------------------------------------- #
 # Navigation
 # --------------------------------------------------------------------------- #
