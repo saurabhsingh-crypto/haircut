@@ -3,6 +3,9 @@
 
 streamlit==1.59.1
 Authlib==1.6.5           # required by st.login (OIDC single sign-on)
+httpx==0.28.1            # Authlib's Starlette integration imports it, but
+                         # neither Authlib nor Streamlit declares it. Without
+                         # it, clicking Sign in returns a bare HTTP 500.
 
 pandas==3.0.3
 numpy==2.5.1
