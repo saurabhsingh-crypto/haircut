@@ -34,7 +34,7 @@ _CONFIG_KEYS = (
     "HAIRCUT_DB_SSL_CA", "HAIRCUT_REQUIRE_MYSQL", "HAIRCUT_DB",
     "HAIRCUT_ALLOWED_DOMAINS", "HAIRCUT_ALLOWED_EMAILS",
     "HAIRCUT_ADMIN_EMAILS", "HAIRCUT_ALLOW_ANONYMOUS",
-    "HAIRCUT_ANONYMOUS_EMAIL",
+    "HAIRCUT_ANONYMOUS_EMAIL", "HAIRCUT_ADMIN_PASSWORD",
 )
 
 
@@ -195,10 +195,21 @@ else:
     if not is_allowed(USER_EMAIL):
         denied_screen(USER_EMAIL)
 
-# Signed in and approved. Pages read these instead of touching st.user.
-st.session_state["user_email"] = USER_EMAIL
-st.session_state["user_name"] = USER_NAME
-st.session_state["is_admin"] = sup.is_admin(USER_EMAIL)
+# Pages read these instead of touching st.user.
+#
+# An admin who unlocked with the password stays unlocked for the rest of the
+# session. This has to be checked here, before the identity is written: the
+# script re-runs on every interaction, and recomputing is_admin from the
+# (absent) identity each time would undo the unlock immediately.
+UNLOCKED_AS = st.session_state.get("admin_unlocked_as")
+if UNLOCKED_AS:
+    st.session_state["user_email"] = UNLOCKED_AS
+    st.session_state["user_name"] = UNLOCKED_AS
+    st.session_state["is_admin"] = True
+else:
+    st.session_state["user_email"] = USER_EMAIL
+    st.session_state["user_name"] = USER_NAME
+    st.session_state["is_admin"] = sup.is_admin(USER_EMAIL)
 
 # One audit row per session, not per rerun: the script re-executes on every
 # interaction, so this is guarded rather than called unconditionally.
@@ -226,6 +237,38 @@ with st.sidebar:
     if not ALLOW_ANONYMOUS and st.button("Sign out", icon=":material/logout:",
                                          width="stretch"):
         st.logout()
+
+    # --- admin unlock, for deployments with no identity provider ------------ #
+    # A typed password is weaker than a real sign-in: it can be shared and it
+    # does not expire. It is the second lock, not the first - reaching the app
+    # at all is still controlled by the host's viewer list.
+    ADMIN_LIST = sorted(sup.admin_emails())
+    if ADMIN_LIST and sup.admin_password() and not st.session_state["is_admin"]:
+        st.session_state.setdefault("admin_tries", 0)
+        with st.expander("Admin", icon=":material/lock:"):
+            if st.session_state["admin_tries"] >= 5:
+                st.error("Too many attempts. Reload the page to try again.",
+                         icon=":material/block:")
+            else:
+                who = st.selectbox("Who are you?", ADMIN_LIST, key="admin_who")
+                pw = st.text_input("Admin password", type="password",
+                                   key="admin_pw")
+                if st.button("Unlock", icon=":material/key:", width="stretch"):
+                    if sup.check_admin_password(pw):
+                        st.session_state["admin_unlocked_as"] = who
+                        st.session_state["admin_tries"] = 0
+                        sup.log_event(who, sup.ADMIN_UNLOCK)
+                        st.rerun()
+                    else:
+                        st.session_state["admin_tries"] += 1
+                        sup.log_event(who, sup.ADMIN_FAILED,
+                                      f"attempt {st.session_state['admin_tries']}")
+                        st.error("Incorrect password.", icon=":material/error:")
+    elif st.session_state["is_admin"] and ALLOW_ANONYMOUS:
+        st.caption(f":material/lock_open: Admin: {st.session_state['user_email']}")
+        if st.button("Lock admin", icon=":material/lock:", width="stretch"):
+            st.session_state.pop("admin_unlocked_as", None)
+            st.rerun()
 
 pages = [
     st.Page("app_pages/calculate.py", title="Calculate margin",

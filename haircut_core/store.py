@@ -488,6 +488,8 @@ MASTER_DELETED = "master_deleted"
 
 EVENT_LABELS = {
     SIGN_IN: "Signed in",
+    "admin_unlock": "Unlocked admin",
+    "admin_failed": "Failed admin password",
     MASTER_SAVED: "Added a master",
     MASTER_REPLACED: "Replaced a master",
     MASTER_DELETED: "Deleted a master",

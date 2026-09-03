@@ -7,6 +7,7 @@ and the currency helpers used across pages.
 """
 from __future__ import annotations
 
+import hmac
 import io
 import json
 import os
@@ -93,6 +94,24 @@ def admin_emails() -> set[str]:
 
 def allow_anonymous() -> bool:
     return truthy(os.environ.get("HAIRCUT_ALLOW_ANONYMOUS"))
+
+
+def admin_password() -> str:
+    """The shared password that unlocks admin rights, or "" if unset."""
+    return (os.environ.get("HAIRCUT_ADMIN_PASSWORD") or "").strip()
+
+
+def check_admin_password(candidate: str | None) -> bool:
+    """Compare in constant time, so the password cannot be guessed by timing.
+
+    An unset password unlocks nothing: without this the empty string would
+    match an empty setting and hand admin rights to anyone who pressed the
+    button.
+    """
+    expected = admin_password()
+    if not expected or not candidate:
+        return False
+    return hmac.compare_digest(str(candidate).strip(), expected)
 
 
 def normalize_email(email: str | None) -> str | None:
@@ -205,6 +224,9 @@ def bootstrap_storage() -> dict:
 # --------------------------------------------------------------------------- #
 # Audit log
 # --------------------------------------------------------------------------- #
+
+ADMIN_UNLOCK = "admin_unlock"
+ADMIN_FAILED = "admin_failed"
 
 SIGN_IN = store.SIGN_IN
 MASTER_SAVED = store.MASTER_SAVED
