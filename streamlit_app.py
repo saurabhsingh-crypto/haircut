@@ -305,11 +305,16 @@ with st.sidebar:
     elif ADMIN_AVAILABLE:
         # Tertiary renders as quiet link-style text, so it reads as a footer
         # control rather than an invitation.
-        st.space("medium")
-        if st.button("Staff access", icon=":material/settings:",
-                     type="tertiary"):
-            st.session_state["admin_dialog_open"] = True
-            st.rerun()
+        # Pushed to the bottom corner and reduced to a single icon: staff who
+        # need it know it is there, and nobody else has any reason to notice
+        # it. The tooltip carries the meaning, so it is still reachable by
+        # screen reader and on keyboard focus.
+        st.space("large")
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("", icon=":material/settings:", type="tertiary",
+                         help="Staff access", key="admin_open"):
+                st.session_state["admin_dialog_open"] = True
+                st.rerun()
 
 if ADMIN_AVAILABLE and st.session_state.get("admin_dialog_open"):
     admin_dialog()
