@@ -407,7 +407,14 @@ with tab_file:
 
     flags = []
     if totals["n_missing"]:
-        flags.append(f"{totals['n_missing']:,} holding(s) matched no haircut record")
+        # Say how much money this covers, not just how many rows. Unmatched
+        # holdings count at full value, so a large figure here means the
+        # available margin rests on securities the master does not know.
+        unmatched_value = (float(calc.missing_isin["holding_value"].sum())
+                           if not calc.missing_isin.empty else 0.0)
+        flags.append(
+            f"{totals['n_missing']:,} holding(s) matched no haircut record "
+            f"and count at full value ({sup.money(unmatched_value)})")
     if totals["n_scheme_matched"]:
         flags.append(f"{totals['n_scheme_matched']:,} matched by scheme name "
                      f"rather than ISIN")

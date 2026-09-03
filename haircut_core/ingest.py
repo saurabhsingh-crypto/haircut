@@ -370,6 +370,26 @@ def _read_pdf(raw: bytes, stem: str, filename: str) -> list[Grid]:
             "as Excel or CSV."
         ) from e
     with pdf_doc as pdf:
+        # A PDF with no text at all is a scan - a picture of a statement.
+        # Nothing can read it, and guessing produces numbers that look real,
+        # so it is refused rather than parsed.
+        if not any(page.chars for page in pdf.pages):
+            raise UnsupportedFile(
+                "This PDF has no text in it - it is a scan or a photograph of "
+                "a statement, so the figures cannot be read. Ask for the "
+                "original statement file, or upload it as Excel or CSV.")
+
+        # Holdings-aware extraction: anchors rows on ISINs and identifies the
+        # value column arithmetically, which handles layouts nothing knows in
+        # advance. Falls through to the generic reader if it finds nothing.
+        try:
+            from . import pdf_reader
+            holdings = pdf_reader.extract_holdings(pdf)
+        except Exception:
+            holdings = None
+        if holdings is not None and len(holdings) > 1:
+            return [Grid(_reset(holdings), "holdings", "pdf", filename)]
+
         for pno, page in enumerate(pdf.pages, start=1):
             page_rows: list[list] = []
             # 1) try ruled / lattice tables first
