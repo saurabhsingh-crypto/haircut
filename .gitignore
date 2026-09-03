@@ -2,9 +2,11 @@
 .env
 .env.*
 !.env.example
-# every secrets variant, including working copies, EXCEPT the template
-.streamlit/secrets.toml
-.streamlit/secrets.toml.*
+
+# Ignore EVERYTHING under .streamlit, then allow back the two files that are
+# safe to publish. A denylist kept missing new filenames; this cannot.
+.streamlit/*
+!.streamlit/config.toml
 !.streamlit/secrets.toml.example
 
 # local database file (SQLite fallback)

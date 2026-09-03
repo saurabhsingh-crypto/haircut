@@ -126,8 +126,12 @@ if pf_res.n_rows == 0:
 
 masters = sup.list_masters()
 if not masters:
-    st.warning("No haircut master is saved yet. Add one on the Haircut "
-               "library page.", icon=":material/library_add:")
+    if st.session_state.get("is_admin"):
+        st.warning("No haircut master is saved yet. Add one on the Haircut "
+                   "library page.", icon=":material/library_add:")
+    else:
+        st.warning("No haircut master is available yet. Ask an administrator "
+                   "to add one.", icon=":material/library_add:")
     st.stop()
 
 by_slug = {m["slug"]: m for m in masters}

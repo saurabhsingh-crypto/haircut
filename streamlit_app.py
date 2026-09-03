@@ -270,18 +270,20 @@ with st.sidebar:
             st.session_state.pop("admin_unlocked_as", None)
             st.rerun()
 
+# Calculating margin is the everyday job, so everyone gets it. The library
+# and diagnostics change or expose the shared state, so they are admin-only.
 pages = [
     st.Page("app_pages/calculate.py", title="Calculate margin",
             icon=":material/calculate:", default=True),
-    st.Page("app_pages/library.py", title="Haircut library",
-            icon=":material/library_books:"),
 ]
 
-# Diagnostics is registered only for admins. This is real access control, not
-# a hidden link: st.navigation resolves the URL against the page list built
-# for THIS session, so a page that was never registered cannot be reached by
+# These are registered only for admins. That is real access control, not a
+# hidden link: st.navigation resolves the URL against the page list built for
+# THIS session, so a page that was never registered cannot be reached by
 # typing its path - the request falls back to the default page.
 if st.session_state["is_admin"]:
+    pages.append(st.Page("app_pages/library.py", title="Haircut library",
+                         icon=":material/library_books:"))
     pages.append(st.Page("app_pages/diagnostics.py", title="Diagnostics",
                          icon=":material/monitor_heart:"))
 
