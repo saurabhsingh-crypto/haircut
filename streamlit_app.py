@@ -34,6 +34,7 @@ _CONFIG_KEYS = (
     "HAIRCUT_DB_SSL_CA", "HAIRCUT_REQUIRE_MYSQL", "HAIRCUT_DB",
     "HAIRCUT_ALLOWED_DOMAINS", "HAIRCUT_ALLOWED_EMAILS",
     "HAIRCUT_ADMIN_EMAILS", "HAIRCUT_ALLOW_ANONYMOUS",
+    "HAIRCUT_ANONYMOUS_EMAIL",
 )
 
 
@@ -163,9 +164,29 @@ def denied_screen(email: str | None) -> None:
     st.stop()
 
 
+def host_identity() -> tuple[str | None, str | None]:
+    """The viewer's identity as supplied by the hosting platform, if any.
+
+    `st.user` is populated by the host, not only by our own OIDC config, so a
+    platform that authenticates viewers itself (Streamlit Community Cloud for
+    a private app, for instance) can still tell us who is here. Where it does
+    not, both values are None and we simply have no identity.
+    """
+    try:
+        return (getattr(st.user, "email", None) or None,
+                getattr(st.user, "name", None) or None)
+    except Exception:
+        return None, None
+
+
 if ALLOW_ANONYMOUS:
-    USER_EMAIL = "anonymous@localhost"
-    USER_NAME = "Local user"
+    # No sign-in screen at all. Identity, if we get one, comes from the host
+    # platform; HAIRCUT_ANONYMOUS_EMAIL is a stand-in for local development so
+    # the admin checks remain testable. With neither, there is no identity -
+    # the audit log records "unknown" and nobody is an admin.
+    USER_EMAIL, USER_NAME = host_identity()
+    USER_EMAIL = USER_EMAIL or os.environ.get("HAIRCUT_ANONYMOUS_EMAIL") or None
+    USER_NAME = USER_NAME or USER_EMAIL or "Anonymous"
 else:
     if not AUTH_CONFIGURED or not st.user.is_logged_in:
         login_screen()
@@ -200,8 +221,11 @@ with st.sidebar:
             f"them above `[auth]` - a plain key must precede any table header.",
             icon=":material/warning:")
     if ALLOW_ANONYMOUS:
-        st.warning("Sign-in is disabled (`HAIRCUT_ALLOW_ANONYMOUS`). Use this "
-                   "for local development only.", icon=":material/warning:")
+        st.caption(":material/info: Sign-in is disabled. Access is controlled "
+                   "by whoever can open this app."
+                   + ("" if USER_EMAIL else
+                      " No identity is available, so the audit log records "
+                      "'unknown' and nobody has admin rights."))
     elif st.button("Sign out", icon=":material/logout:", width="stretch"):
         st.logout()
 

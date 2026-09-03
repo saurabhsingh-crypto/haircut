@@ -134,11 +134,12 @@ def is_admin(email: str | None, admins: set[str] | None = None) -> bool:
     into the app, being on this list gets you the destructive controls. An
     empty admin list grants nobody, matching how the sign-in gate behaves.
 
-    Local anonymous mode is treated as admin, so the diagnostics page stays
-    usable while developing without an identity provider.
+    This depends only on the address, never on how it was obtained, so it
+    works the same whether the identity came from our own OIDC sign-in or
+    from the hosting platform. With no identity at all - sign-in disabled and
+    a host that supplies none - nobody is an admin, and the audit log is read
+    directly from the database instead.
     """
-    if allow_anonymous():
-        return True
     email = normalize_email(email)
     if not email:
         return False

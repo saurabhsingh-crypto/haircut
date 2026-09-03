@@ -194,7 +194,8 @@ never shadowed by a file committed by mistake.
 | `HAIRCUT_ALLOWED_DOMAINS` | - | Comma-separated email domains that may sign in. |
 | `HAIRCUT_ALLOWED_EMAILS` | - | Comma-separated individual addresses. |
 | `HAIRCUT_ADMIN_EMAILS` | - | Comma-separated addresses that get admin rights. |
-| `HAIRCUT_ALLOW_ANONYMOUS` | - | `1` disables sign-in. Local development only. |
+| `HAIRCUT_ALLOW_ANONYMOUS` | - | `1` removes the sign-in screen entirely. |
+| `HAIRCUT_ANONYMOUS_EMAIL` | - | Stand-in identity when sign-in is off and the host supplies none. |
 
 Upload size is capped at 25 MB in `.streamlit/config.toml`
 (`server.maxUploadSize`).
