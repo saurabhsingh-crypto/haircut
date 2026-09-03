@@ -221,6 +221,64 @@ if not st.session_state.get("signin_logged"):
 # Navigation
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# Administrator access
+# --------------------------------------------------------------------------- #
+#
+# Kept in a dialog behind an unobtrusive control rather than sitting open in
+# the sidebar: an ordinary user has no business being shown a password box,
+# and a login form on every page looks like something left unfinished.
+#
+# A typed password is weaker than a real sign-in - it can be shared and it
+# does not expire. It is the second lock, not the first: reaching the app at
+# all is still controlled by the host's viewer list.
+
+ADMIN_LIST = sorted(sup.admin_emails())
+ADMIN_AVAILABLE = bool(ADMIN_LIST and sup.admin_password())
+
+
+def close_admin_dialog() -> None:
+    st.session_state["admin_dialog_open"] = False
+
+
+@st.dialog("Administrator access")
+def admin_dialog() -> None:
+    """The unlock form.
+
+    Held open by a flag rather than by the click that opened it: a dialog
+    only renders during the run in which it is called, so without the flag
+    the Unlock button would render once and its handler would never run.
+    """
+    st.session_state.setdefault("admin_tries", 0)
+    if st.session_state["admin_tries"] >= 5:
+        st.error("Too many attempts. Reload the page to try again.",
+                 icon=":material/block:")
+        return
+
+    st.caption("For staff who maintain the haircut library. Everyone else can "
+               "close this - calculating margin needs no password.")
+    who = st.selectbox("Account", ADMIN_LIST, key="admin_who")
+    pw = st.text_input("Password", type="password", key="admin_pw")
+
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("Cancel"):
+            close_admin_dialog()
+            st.rerun()
+        if st.button("Unlock", icon=":material/key:", type="primary"):
+            if sup.check_admin_password(pw):
+                st.session_state["admin_unlocked_as"] = who
+                st.session_state["admin_tries"] = 0
+                close_admin_dialog()
+                sup.log_event(who, sup.ADMIN_UNLOCK)
+                st.rerun()
+            else:
+                st.session_state["admin_tries"] += 1
+                sup.log_event(who, sup.ADMIN_FAILED,
+                              f"attempt {st.session_state['admin_tries']}")
+                # Deliberately says nothing about which half was wrong.
+                st.error("Incorrect password.", icon=":material/error:")
+
+
 with st.sidebar:
     st.subheader("Haircut margin")
     # Only worth saying when there is an identity to name. With sign-in off
@@ -238,37 +296,23 @@ with st.sidebar:
                                          width="stretch"):
         st.logout()
 
-    # --- admin unlock, for deployments with no identity provider ------------ #
-    # A typed password is weaker than a real sign-in: it can be shared and it
-    # does not expire. It is the second lock, not the first - reaching the app
-    # at all is still controlled by the host's viewer list.
-    ADMIN_LIST = sorted(sup.admin_emails())
-    if ADMIN_LIST and sup.admin_password() and not st.session_state["is_admin"]:
-        st.session_state.setdefault("admin_tries", 0)
-        with st.expander("Admin", icon=":material/lock:"):
-            if st.session_state["admin_tries"] >= 5:
-                st.error("Too many attempts. Reload the page to try again.",
-                         icon=":material/block:")
-            else:
-                who = st.selectbox("Who are you?", ADMIN_LIST, key="admin_who")
-                pw = st.text_input("Admin password", type="password",
-                                   key="admin_pw")
-                if st.button("Unlock", icon=":material/key:", width="stretch"):
-                    if sup.check_admin_password(pw):
-                        st.session_state["admin_unlocked_as"] = who
-                        st.session_state["admin_tries"] = 0
-                        sup.log_event(who, sup.ADMIN_UNLOCK)
-                        st.rerun()
-                    else:
-                        st.session_state["admin_tries"] += 1
-                        sup.log_event(who, sup.ADMIN_FAILED,
-                                      f"attempt {st.session_state['admin_tries']}")
-                        st.error("Incorrect password.", icon=":material/error:")
-    elif st.session_state["is_admin"] and ALLOW_ANONYMOUS:
-        st.caption(f":material/lock_open: Admin: {st.session_state['user_email']}")
+    if st.session_state["is_admin"] and ALLOW_ANONYMOUS:
+        st.caption(f":material/lock_open: Admin - "
+                   f"{st.session_state['user_email']}")
         if st.button("Lock admin", icon=":material/lock:", width="stretch"):
             st.session_state.pop("admin_unlocked_as", None)
             st.rerun()
+    elif ADMIN_AVAILABLE:
+        # Tertiary renders as quiet link-style text, so it reads as a footer
+        # control rather than an invitation.
+        st.space("medium")
+        if st.button("Staff access", icon=":material/settings:",
+                     type="tertiary"):
+            st.session_state["admin_dialog_open"] = True
+            st.rerun()
+
+if ADMIN_AVAILABLE and st.session_state.get("admin_dialog_open"):
+    admin_dialog()
 
 # Calculating margin is the everyday job, so everyone gets it. The library
 # and diagnostics change or expose the shared state, so they are admin-only.
