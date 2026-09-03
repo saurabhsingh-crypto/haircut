@@ -401,6 +401,19 @@ def money_compact(x) -> str:
         return "-"
 
 
+def manual_excel(result: pd.DataFrame) -> bytes:
+    """The manual calculator's table as a one-sheet workbook."""
+    labels = {"isin": "ISIN", "scheme_name": "Security Name",
+              "haircut_pct": "Haircut %", "amount": "Amount",
+              "haircut_amount": "Haircut Amount",
+              "available_margin": "Available Margin"}
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        result.rename(columns=labels).to_excel(
+            xw, sheet_name="Manual Calculation", index=False)
+    return buf.getvalue()
+
+
 def checks_frame(checks: list) -> pd.DataFrame:
     """Validation tuples -> a frame ready for st.dataframe."""
     return pd.DataFrame(
