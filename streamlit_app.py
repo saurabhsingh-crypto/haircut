@@ -212,7 +212,10 @@ if not st.session_state.get("signin_logged"):
 
 with st.sidebar:
     st.subheader("Haircut margin")
-    st.caption(f"Signed in as {USER_NAME}")
+    # Only worth saying when there is an identity to name. With sign-in off
+    # and no identity, "Signed in as Anonymous" is noise on every page.
+    if USER_EMAIL:
+        st.caption(f"Signed in as {USER_NAME}")
     if MISPLACED_KEYS:
         st.warning(
             f"{len(MISPLACED_KEYS)} setting(s) sit below the `[auth]` header in "
@@ -220,13 +223,8 @@ with st.sidebar:
             f"`{'`, `'.join(MISPLACED_KEYS)}`. They were still read, but move "
             f"them above `[auth]` - a plain key must precede any table header.",
             icon=":material/warning:")
-    if ALLOW_ANONYMOUS:
-        st.caption(":material/info: Sign-in is disabled. Access is controlled "
-                   "by whoever can open this app."
-                   + ("" if USER_EMAIL else
-                      " No identity is available, so the audit log records "
-                      "'unknown' and nobody has admin rights."))
-    elif st.button("Sign out", icon=":material/logout:", width="stretch"):
+    if not ALLOW_ANONYMOUS and st.button("Sign out", icon=":material/logout:",
+                                         width="stretch"):
         st.logout()
 
 pages = [
