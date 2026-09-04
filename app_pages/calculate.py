@@ -106,14 +106,20 @@ def manual_calculator():
         "Search by ISIN or security name",
         options=list(options),
         format_func=lambda k: options[k],
-        filter_mode="contains",
+        # Fuzzy, not "contains": a substring match needs the typed text
+        # to appear unbroken, so "icici bluechip" finds nothing because
+        # the real name reads "ICICI PRUDENTIAL BLUECHIP". Fuzzy matches
+        # an in-order subsequence, which is how people actually type a
+        # fund name: the words they remember, in order, skipping the rest.
+        filter_mode="fuzzy",
         placeholder="Start typing an ISIN or a fund name",
         # The key carries a nonce so that adding rows can reset the widget by
         # creating a new one. Assigning to a widget's own session-state entry
         # after it has rendered is refused by Streamlit.
         key="manual_pick_" + str(st.session_state["manual_nonce"]),
-        help="Matches anywhere in the ISIN or the name. Pick as many as you "
-             "like, then press Add.")
+        help="Type the words you remember, in order - they need not be next "
+             "to each other. Best matches are listed first. Pick as many as "
+             "you like, then press Add.")
 
     label = ("Add " + str(len(picked)) + " selected") if picked else "Add"
     if st.button(label, icon=":material/add:", disabled=not picked,
