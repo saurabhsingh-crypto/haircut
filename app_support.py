@@ -401,20 +401,6 @@ def money_compact(x) -> str:
         return "-"
 
 
-@st.cache_data(ttl="30m", max_entries=4, show_spinner=False)
-def manual_options(slug: str) -> dict:
-    """One searchable label per security in a master, keyed by row index.
-
-    Built once per master and cached: the browser filters this list as the
-    user types, so it is sent whole rather than queried per keystroke.
-    """
-    df = store.load_master(slug)
-    return {
-        i: f"{r.isin}  -  {r.scheme_name}  -  {float(r.haircut_pct):.2f}%"
-        for i, r in enumerate(df.itertuples(index=False))
-    }
-
-
 def manual_excel(result: pd.DataFrame) -> bytes:
     """The manual calculator's table as a one-sheet workbook."""
     labels = {"isin": "ISIN", "scheme_name": "Security Name",

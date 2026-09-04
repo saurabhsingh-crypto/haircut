@@ -30,6 +30,21 @@ st.session_state.setdefault("calc_params", None)
 # chosen haircut master, add the securities you care about, type the amounts.
 # The arithmetic is the same as the engine's, so both tabs always agree.
 
+# Kept in the page rather than in app_support. Streamlit re-executes page
+# scripts on every run but keeps imported modules in memory for the life of
+# the process, so a page calling a brand-new helper in a shared module fails
+# with AttributeError until the process is restarted. A helper that lives
+# beside its only caller cannot drift out of step that way.
+@st.cache_data(ttl="30m", max_entries=4, show_spinner=False)
+def manual_options(slug: str) -> dict:
+    """One searchable label per security in a master, keyed by row index."""
+    df = sup.load_master(slug)
+    return {
+        i: f"{r.isin}  -  {r.scheme_name}  -  {float(r.haircut_pct):.2f}%"
+        for i, r in enumerate(df.itertuples(index=False))
+    }
+
+
 MANUAL_COLS = ["isin", "scheme_name", "haircut_pct", "amount"]
 SEARCH_LIMIT = 50
 
@@ -86,7 +101,7 @@ def manual_calculator():
     # the letters are typed, in the browser, with no round trip to the server.
     # st.text_input cannot do this - it only reports a value on Enter or when
     # focus leaves, so searching always cost a keypress and a rerun.
-    options = sup.manual_options(slug)
+    options = manual_options(slug)
     picked = st.multiselect(
         "Search by ISIN or security name",
         options=list(options),
