@@ -65,6 +65,7 @@ def _sync_amounts(edited):
 
 def manual_calculator():
     st.session_state.setdefault("manual_rows", [])
+    st.session_state.setdefault("manual_nonce", 0)
 
     masters = sup.list_masters()
     if not masters:
@@ -81,49 +82,46 @@ def manual_calculator():
     hc_df = sup.load_master(slug)
 
     # ---- find securities --------------------------------------------------
-    query = st.text_input(
-        "Search by ISIN or security name", key="manual_query",
-        placeholder="e.g. INF204K01K15, or nippon liquid")
+    # A multiselect rather than a text box and a results table: it filters as
+    # the letters are typed, in the browser, with no round trip to the server.
+    # st.text_input cannot do this - it only reports a value on Enter or when
+    # focus leaves, so searching always cost a keypress and a rerun.
+    options = sup.manual_options(slug)
+    picked = st.multiselect(
+        "Search by ISIN or security name",
+        options=list(options),
+        format_func=lambda k: options[k],
+        filter_mode="contains",
+        placeholder="Start typing an ISIN or a fund name",
+        # The key carries a nonce so that adding rows can reset the widget by
+        # creating a new one. Assigning to a widget's own session-state entry
+        # after it has rendered is refused by Streamlit.
+        key="manual_pick_" + str(st.session_state["manual_nonce"]),
+        help="Matches anywhere in the ISIN or the name. Pick as many as you "
+             "like, then press Add.")
 
-    found = _manual_search(hc_df, query)
-    if query and found.empty:
-        st.caption("Nothing in " + by_slug[slug]["name"] + " matches that.")
-    elif not found.empty:
-        shown = found.head(SEARCH_LIMIT)
-        more = (", showing the first " + str(SEARCH_LIMIT)
-                if len(found) > SEARCH_LIMIT else "")
-        st.caption(format(len(found), ",") + " match(es)" + more
-                   + ". Tick the ones you want, then press Add.")
-        picked = st.dataframe(
-            shown, hide_index=True, on_select="rerun",
-            selection_mode="multi-row", key="manual_hits",
-            column_config={
-                "isin": st.column_config.TextColumn("ISIN", pinned=True),
-                "scheme_name": st.column_config.TextColumn("Security name"),
-                "haircut_pct": st.column_config.NumberColumn(
-                    "Haircut %", format="%.2f%%"),
+    label = ("Add " + str(len(picked)) + " selected") if picked else "Add"
+    if st.button(label, icon=":material/add:", disabled=not picked,
+                 type="primary"):
+        _sync_amounts(st.session_state.get("manual_edited"))
+        have = {r["isin"] for r in st.session_state["manual_rows"] if r["isin"]}
+        added = 0
+        for idx in picked:
+            row = hc_df.iloc[idx]
+            if row["isin"] and row["isin"] in have:
+                continue
+            st.session_state["manual_rows"].append({
+                "isin": row["isin"],
+                "scheme_name": row["scheme_name"],
+                "haircut_pct": float(row["haircut_pct"]),
+                "amount": 0.0,
             })
-        chosen = picked.selection.rows if picked and picked.selection else []
-        label = ("Add " + str(len(chosen)) + " selected") if chosen else "Add"
-        if st.button(label, icon=":material/add:", disabled=not chosen,
-                     type="primary"):
-            _sync_amounts(st.session_state.get("manual_edited"))
-            have = {r["isin"] for r in st.session_state["manual_rows"] if r["isin"]}
-            added = 0
-            for i in chosen:
-                row = shown.iloc[i]
-                if row["isin"] and row["isin"] in have:
-                    continue
-                st.session_state["manual_rows"].append({
-                    "isin": row["isin"],
-                    "scheme_name": row["scheme_name"],
-                    "haircut_pct": float(row["haircut_pct"]),
-                    "amount": 0.0,
-                })
-                added += 1
-            if added < len(chosen):
-                st.toast(str(len(chosen) - added) + " already in the table")
-            st.rerun()
+            have.add(row["isin"])
+            added += 1
+        if added < len(picked):
+            st.toast(str(len(picked) - added) + " already in the table")
+        st.session_state["manual_nonce"] += 1
+        st.rerun()
 
     # ---- the working table ------------------------------------------------
     rows = st.session_state["manual_rows"]
